@@ -1,73 +1,43 @@
-from flask import Flask
-import json
 
-from flask_pytest_example.handlers.routes import configure_routes
+import unittest
+from your_app import create_app  # Adjust import based on your app structure
+from your_app.database import db_session
+from your_app.models import Product
 
+class TestProductRoutes(unittest.TestCase):
 
-def test_base_route():
-    app = Flask(__name__)
-    configure_routes(app)
-    client = app.test_client()
-    url = '/'
+    @classmethod
+    def setUpClass(cls):
+        """Set up a test client and test products before running the tests."""
+        cls.app = create_app()
+        cls.client = cls.app.test_client()
+        
+        cls.product = Product(name='Test Product', price=19.99, description='A test product.', category='Test Category')
+        db_session.add(cls.product)
+        db_session.commit()
 
-    response = client.get(url)
-    assert response.get_data() == b'Hello, World!'
-    assert response.status_code == 200
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up after tests are done."""
+        db_session.delete(cls.product)
+        db_session.commit()
 
+    def test_read_product(self):
+        """Test reading a product by ID."""
+        response = self.client.get(f'/products/{self.product.id}')  # Assuming this is your endpoint
+        self.assertEqual(response.status_code, 200)  # Check that the response code is 200
+        
+        data = response.get_json()
+        self.assertIsNotNone(data)  # Ensure we received some data
+        self.assertEqual(data['name'], 'Test Product')  # Check that the product name matches
+        self.assertEqual(data['price'], 19.99)  # Check that the product price matches
+        self.assertEqual(data['description'], 'A test product.')  # Check description
+        self.assertEqual(data['category'], 'Test Category')  # Check category
 
-def test_post_route__success():
-    app = Flask(__name__)
-    configure_routes(app)
-    client = app.test_client()
-    url = '/post/test'
+    def test_read_nonexistent_product(self):
+        """Test reading a product that does not exist."""
+        response = self.client.get('/products/9999')  # Using an ID that does not exist
+        self.assertEqual(response.status_code, 404)  # Check that the response code is 404
 
-    mock_request_headers = {
-        'authorization-sha256': '123'
-    }
-
-    mock_request_data = {
-        'request_id': '123',
-        'payload': {
-            'py': 'pi',
-            'java': 'script'
-        }
-    }
-
-    response = client.post(url, data=json.dumps(mock_request_data), headers=mock_request_headers)
-    assert response.status_code == 200
-
-
-def test_post_route__failure__unauthorized():
-    app = Flask(__name__)
-    configure_routes(app)
-    client = app.test_client()
-    url = '/post/test'
-
-    mock_request_headers = {}
-
-    mock_request_data = {
-        'request_id': '123',
-        'payload': {
-            'py': 'pi',
-            'java': 'script'
-        }
-    }
-
-    response = client.post(url, data=json.dumps(mock_request_data), headers=mock_request_headers)
-    assert response.status_code == 401
-
-
-def test_post_route__failure__bad_request():
-    app = Flask(__name__)
-    configure_routes(app)
-    client = app.test_client()
-    url = '/post/test'
-
-    mock_request_headers = {
-        'authorization-sha256': '123'
-    }
-
-    mock_request_data = {}
-
-    response = client.post(url, data=json.dumps(mock_request_data), headers=mock_request_headers)
-    assert response.status_code == 400
+if __name__ == '__main__':
+    unittest.main()
